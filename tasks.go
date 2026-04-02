@@ -8,12 +8,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
 func runCommandStream(password string, outputChan chan string, command ...string) error {
-	cmd := exec.Command("sudo", append([]string{"-S"}, command...)...)
-	cmd.Stdin = bytes.NewBufferString(password + "\n")
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		// On macOS, some brew commands don't need sudo, but we use it if requested
+		// However, brew specifically dislikes being run as root.
+		if command[0] == "brew" {
+			cmd = exec.Command(command[0], command[1:]...)
+		} else {
+			cmd = exec.Command("sudo", append([]string{"-S"}, command...)...)
+			cmd.Stdin = bytes.NewBufferString(password + "\n")
+		}
+	} else {
+		cmd = exec.Command("sudo", append([]string{"-S"}, command...)...)
+		cmd.Stdin = bytes.NewBufferString(password + "\n")
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -52,8 +65,13 @@ func runCommandStream(password string, outputChan chan string, command ...string
 }
 
 func runCommand(password string, command ...string) (string, error) {
-	cmd := exec.Command("sudo", append([]string{"-S"}, command...)...)
-	cmd.Stdin = bytes.NewBufferString(password + "\n")
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" && command[0] == "brew" {
+		cmd = exec.Command(command[0], command[1:]...)
+	} else {
+		cmd = exec.Command("sudo", append([]string{"-S"}, command...)...)
+		cmd.Stdin = bytes.NewBufferString(password + "\n")
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("command failed: %v, output: %s", err, string(output))
@@ -62,6 +80,9 @@ func runCommand(password string, command ...string) (string, error) {
 }
 
 func installGit(password string) (string, error) {
+	if runtime.GOOS == "darwin" {
+		return runCommand(password, "brew", "update")
+	}
 	return runCommand(password, "apt-get", "update", "-y")
 }
 
@@ -107,7 +128,13 @@ func runInstallInfo(password string, outputChan chan string) error {
 }
 
 func configureLibreOffice() error {
-	configPath := filepath.Join(os.Getenv("HOME"), ".config", "libreoffice", "4", "user", "registrymodifications.xcu")
+	var configPath string
+	if runtime.GOOS == "darwin" {
+		configPath = filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "libreoffice", "4", "user", "registrymodifications.xcu")
+	} else {
+		configPath = filepath.Join(os.Getenv("HOME"), ".config", "libreoffice", "4", "user", "registrymodifications.xcu")
+	}
+	
 	os.MkdirAll(filepath.Dir(configPath), 0755)
 	settings := []string{
 		`<item oor:path="/org.openoffice.Office.Common/Save/DefaultSaveOptions"><prop oor:name="WordDocument" oor:op="fuse"><value>MS Word 2007 XML</value></prop></item>`,
@@ -135,6 +162,9 @@ func checkWifi() (bool, error) {
 }
 
 func playSound() error {
-	cmd := exec.Command("aplay", "/usr/share/sounds/alsa/Front_Center.wav")
-	return cmd.Run()
+	if runtime.GOOS == "darwin" {
+		return exec.Command("afplay", "/System/Library/Sounds/Glass.aiff").Run()
+	}
+	return exec.Command("aplay", "/usr/share/sounds/alsa/Front_Center.wav").Run()
 }
+

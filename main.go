@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -106,11 +107,21 @@ func showConfiguration(w fyne.Window) {
 		var logMutex sync.Mutex
 		
 		go func() {
-			fyne.Do(func() { statusLabel.SetText("Status: Installing git, alsa-utils, cheese...") })
-			_, err := runCommand(password, "apt-get", "update")
-			if err == nil {
-				_, err = runCommand(password, "apt-get", "install", "-y", "git", "alsa-utils", "cheese")
+			var err error
+			if runtime.GOOS == "darwin" {
+				fyne.Do(func() { statusLabel.SetText("Status: Updating Homebrew and installing git, ffmpeg...") })
+				_, err = runCommand(password, "brew", "update")
+				if err == nil {
+					_, err = runCommand(password, "brew", "install", "git", "ffmpegcl
+				}
+			} else {
+				fyne.Do(func() { statusLabel.SetText("Status: Installing git, alsa-utils, cheese...") })
+				_, err = runCommand(password, "apt-get", "update")
+				if err == nil {
+					_, err = runCommand(password, "apt-get", "install", "-y", "git", "alsa-utils", "cheese")
+				}
 			}
+
 			if err != nil {
 				fyne.Do(func() {
 					statusLabel.SetText(fmt.Sprintf("Error installing packages: %v", err))
@@ -122,16 +133,18 @@ func showConfiguration(w fyne.Window) {
 			}
 			fyne.Do(func() { progress.SetValue(0.10) })
 
-			fyne.Do(func() { statusLabel.SetText("Status: Downloading kw-linux GitHub repo...") })
-			_, err = cloneRepo(password)
-			if err != nil {
-				fyne.Do(func() {
-					statusLabel.SetText(fmt.Sprintf("Error cloning kw-linux repo: %v", err))
-					startBtn.Enable()
-					passwordEntry.Enable()
-					infoRepoCheck.Enable()
-				})
-				return
+			if runtime.GOOS != "darwin" {
+				fyne.Do(func() { statusLabel.SetText("Status: Downloading kw-linux GitHub repo...") })
+				_, err = cloneRepo(password)
+				if err != nil {
+					fyne.Do(func() {
+						statusLabel.SetText(fmt.Sprintf("Error cloning kw-linux repo: %v", err))
+						startBtn.Enable()
+						passwordEntry.Enable()
+						infoRepoCheck.Enable()
+					})
+					return
+				}
 			}
 			fyne.Do(func() { progress.SetValue(0.20) })
 
@@ -203,17 +216,21 @@ func showConfiguration(w fyne.Window) {
 			}()
 
 			// Core Apps
-			err = runInstallApps(password, outputChan)
-			if err != nil {
-				fyne.Do(func() {
-					statusLabel.SetText(fmt.Sprintf("Error running kw-linux install: %v", err))
-					startBtn.Enable()
-					passwordEntry.Enable()
-					infoRepoCheck.Enable()
-				})
-				close(outputChan)
-				wg.Wait()
-				return
+			if runtime.GOOS != "darwin" {
+				err = runInstallApps(password, outputChan)
+				if err != nil {
+					fyne.Do(func() {
+						statusLabel.SetText(fmt.Sprintf("Error running kw-linux install: %v", err))
+						startBtn.Enable()
+						passwordEntry.Enable()
+						infoRepoCheck.Enable()
+					})
+					close(outputChan)
+					wg.Wait()
+					return
+				}
+			} else {
+				outputChan <- "Skipping kw-linux install scripts on macOS...\n"
 			}
 			fyne.Do(func() { progress.SetValue(0.70) })
 
@@ -363,7 +380,9 @@ func showHardwareCheck(w fyne.Window) {
 
 func showCameraTest(w fyne.Window) {
 	var camCmd *exec.Cmd
-	if _, err := exec.LookPath("cheese"); err == nil {
+	if runtime.GOOS == "darwin" {
+		camCmd = exec.Command("open", "-a", "Photo Booth")
+	} else if _, err := exec.LookPath("cheese"); err == nil {
 		camCmd = exec.Command("cheese")
 	} else {
 		camCmd = exec.Command("ffplay", "/dev/video0")
@@ -373,8 +392,8 @@ func showCameraTest(w fyne.Window) {
 		camCmd.Run()
 	}()
 
-	d := dialog.NewConfirm("Camera Test", "Does the camera work? (Cheese/FFplay should have opened)", func(ok bool) {
-		if camCmd.Process != nil {
+	d := dialog.NewConfirm("Camera Test", "Does the camera work?", func(ok bool) {
+		if camCmd.Process != nil && runtime.GOOS != "darwin" {
 			camCmd.Process.Kill()
 		}
 		if ok {
@@ -403,7 +422,13 @@ func showMicrophoneTest(w fyne.Window) {
 		testFile := filepath.Join(homeDir, "test_mic.wav")
 		
 		go func() {
-			cmd := exec.Command("arecord", "-d", "5", "-f", "cd", testFile)
+			var cmd *exec.Cmd
+			if runtime.GOOS == "darwin" {
+				// Assuming sox is installed via brew or use ffmpeg
+				cmd = exec.Command("ffmpeg", "-y", "-f", "avfoundation", "-i", ":0", "-t", "5", testFile)
+			} else {
+				cmd = exec.Command("arecord", "-d", "5", "-f", "cd", testFile)
+			}
 			cmd.Start()
 
 			for i := 0; i < 5; i++ {
@@ -420,7 +445,12 @@ func showMicrophoneTest(w fyne.Window) {
 				progress.Hide()
 			})
 			
-			playCmd := exec.Command("aplay", testFile)
+			var playCmd *exec.Cmd
+			if runtime.GOOS == "darwin" {
+				playCmd = exec.Command("afplay", testFile)
+			} else {
+				playCmd = exec.Command("aplay", testFile)
+			}
 			playCmd.Run()
 
 			fyne.Do(func() {
