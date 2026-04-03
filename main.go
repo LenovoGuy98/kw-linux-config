@@ -112,7 +112,7 @@ func showConfiguration(w fyne.Window) {
 				fyne.Do(func() { statusLabel.SetText("Status: Updating Homebrew and installing git, ffmpeg...") })
 				_, err = runCommand(password, "brew", "update")
 				if err == nil {
-					_, err = runCommand(password, "brew", "install", "git", "ffmpegcl
+					_, err = runCommand(password, "brew", "install", "git", "ffmpeg")
 				}
 			} else {
 				fyne.Do(func() { statusLabel.SetText("Status: Installing git, alsa-utils, cheese...") })
