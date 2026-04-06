@@ -37,6 +37,13 @@ This application is designed to automate the setup and verification of refurbish
    cd kw-linux-config
    ```
 
+2. **Install packages**
+
+ ```bash
+   apt install Libxxf86vm-dev libxi-dev libxinerama-dev libxrandr-dev libxcursor-dev pkg-config golang
+ ```
+
+
 2. **Install dependencies**:
    ```bash
    go mod tidy
