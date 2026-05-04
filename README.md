@@ -37,11 +37,17 @@ This application is designed to automate the setup and verification of refurbish
    cd kw-linux-config
    ```
 
-2. **Install packages**
+2. **Install packages** (Ubuntu 24.04)
 
  ```bash
    apt install Libxxf86vm-dev libxi-dev libxinerama-dev libxrandr-dev libxcursor-dev pkg-config golang
  ```
+
+** also for MX 25.1 Infinity**
+'' 
+  ```bash
+ sudo apt install  libxi-dev  libxrandr-dev libxcursor-dev pkg-config golang libxxf86vm-dev libxinerama-dev
+  ```
 
 
 2. **Install dependencies**:
